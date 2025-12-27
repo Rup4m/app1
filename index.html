@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Motion Detector Web App</title>
+    <style>
+        body { font-family: sans-serif; text-align: center; padding: 50px; background: #f4f4f4; }
+        #status { font-size: 1.2em; margin: 20px; color: #555; }
+        #log { font-weight: bold; font-size: 2em; color: red; }
+        button { padding: 15px 30px; font-size: 1em; cursor: pointer; background: #007bff; color: white; border: none; border-radius: 5px; }
+    </style>
+</head>
+<body>
+    <h1>Bluetooth Motion Alert</h1>
+    <button id="connectBtn">Connect to Arduino</button>
+    <div id="status">Status: Disconnected</div>
+    <div id="log"></div>
+
+    <script>
+        let port;
+        const connectBtn = document.getElementById('connectBtn');
+        const statusTxt = document.getElementById('status');
+        const logTxt = document.getElementById('log');
+
+        connectBtn.addEventListener('click', async () => {
+            try {
+                // Request a Bluetooth Device
+                const device = await navigator.bluetooth.requestDevice({
+                    filters: [{ namePrefix: 'HC-05' }, { namePrefix: 'HC-06' }],
+                    optionalServices: ['00001101-0000-1000-8000-00805f9b34fb'] // Standard Serial UUID
+                });
+
+                statusTxt.innerText = "Status: Connecting...";
+                
+                // For HC-05, we often use Web Serial API instead if on Desktop Chrome
+                // because Web Bluetooth doesn't always support the SPP profile easily.
+                // Here is the Web Serial approach (Better for HC-05):
+                const port = await navigator.serial.requestPort();
+                await port.open({ baudRate: 9600 });
+                
+                statusTxt.innerText = "Status: Connected!";
+                readData(port);
+
+            } catch (error) {
+                console.error(error);
+                statusTxt.innerText = "Status: Error - " + error;
+            }
+        });
+
+        async function readData(port) {
+            const reader = port.readable.getReader();
+            while (true) {
+                const { value, done } = await reader.read();
+                if (done) break;
+                
+                const data = new TextDecoder().decode(value);
+                if (data.includes("MOTION")) {
+                    logTxt.innerText = "MOTION DETECTED!";
+                    notifyMe();
+                    setTimeout(() => { logTxt.innerText = ""; }, 3000);
+                }
+            }
+        }
+
+        function notifyMe() {
+            if (Notification.permission === "granted") {
+                new Notification("Alert!", { body: "Motion detected in your room!" });
+            } else if (Notification.permission !== "denied") {
+                Notification.requestPermission();
+            }
+        }
+    </script>
+</body>
+</html>
